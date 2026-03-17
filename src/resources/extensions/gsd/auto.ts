@@ -20,7 +20,7 @@ import { deriveState, invalidateStateCache } from "./state.js";
 import type { BudgetEnforcementMode, GSDState } from "./types.js";
 import { loadFile, parseRoadmap, getManifestStatus, resolveAllOverrides, parsePlan } from "./files.js";
 import { loadPrompt } from "./prompt-loader.js";
-import { runVerificationGate, formatFailureContext } from "./verification-gate.js";
+import { runVerificationGate, formatFailureContext, captureRuntimeErrors } from "./verification-gate.js";
 import { writeVerificationJSON } from "./verification-evidence.js";
 export { inlinePriorMilestoneSummary } from "./files.js";
 import { collectSecretsFromManifest } from "../get-secrets-from-user.js";
@@ -1526,6 +1526,16 @@ export async function handleAgentEnd(
         taskPlanVerify,
       });
 
+      // Capture runtime errors from bg-shell and browser console
+      const runtimeErrors = await captureRuntimeErrors();
+      if (runtimeErrors.length > 0) {
+        result.runtimeErrors = runtimeErrors;
+        // Blocking runtime errors override gate pass
+        if (runtimeErrors.some(e => e.blocking)) {
+          result.passed = false;
+        }
+      }
+
       // Auto-fix retry preferences (R005 / D005)
       const autoFixEnabled = prefs?.verification_auto_fix !== false; // default true
       const maxRetries = typeof prefs?.verification_max_retries === "number" ? prefs.verification_max_retries : 2;
@@ -1545,6 +1555,15 @@ export async function handleAgentEnd(
             process.stderr.write(`  ${f.command} exited ${f.exitCode}\n`);
             if (f.stderr) process.stderr.write(`  stderr: ${f.stderr.slice(0, 500)}\n`);
           }
+        }
+      }
+
+      // Log blocking runtime errors to stderr
+      if (result.runtimeErrors?.some(e => e.blocking)) {
+        const blockingErrors = result.runtimeErrors.filter(e => e.blocking);
+        process.stderr.write(`verification-gate: ${blockingErrors.length} blocking runtime error(s) detected\n`);
+        for (const err of blockingErrors) {
+          process.stderr.write(`  [${err.source}] ${err.severity}: ${err.message.slice(0, 200)}\n`);
         }
       }
 

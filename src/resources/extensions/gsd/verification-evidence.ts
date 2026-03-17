@@ -22,6 +22,13 @@ export interface EvidenceCheckJSON {
   verdict: "pass" | "fail";
 }
 
+export interface RuntimeErrorJSON {
+  source: string;
+  severity: string;
+  message: string;
+  blocking: boolean;
+}
+
 export interface EvidenceJSON {
   schemaVersion: 1;
   taskId: string;
@@ -32,6 +39,7 @@ export interface EvidenceJSON {
   checks: EvidenceCheckJSON[];
   retryAttempt?: number;
   maxRetries?: number;
+  runtimeErrors?: RuntimeErrorJSON[];
 }
 
 /**
@@ -67,6 +75,15 @@ export function writeVerificationJSON(
     ...(retryAttempt !== undefined ? { retryAttempt } : {}),
     ...(maxRetries !== undefined ? { maxRetries } : {}),
   };
+
+  if (result.runtimeErrors && result.runtimeErrors.length > 0) {
+    evidence.runtimeErrors = result.runtimeErrors.map(e => ({
+      source: e.source,
+      severity: e.severity,
+      message: e.message,
+      blocking: e.blocking,
+    }));
+  }
 
   const filePath = join(tasksDir, `${taskId}-VERIFY.json`);
   writeFileSync(filePath, JSON.stringify(evidence, null, 2) + "\n", "utf-8");
@@ -108,6 +125,19 @@ export function formatEvidenceTable(result: VerificationResult): string {
     lines.push(
       `| ${num} | ${check.command} | ${check.exitCode} | ${verdict} | ${duration} |`,
     );
+  }
+
+  if (result.runtimeErrors && result.runtimeErrors.length > 0) {
+    lines.push("");
+    lines.push("**Runtime Errors**");
+    lines.push("");
+    lines.push("| # | Source | Severity | Blocking | Message |");
+    lines.push("|---|--------|----------|----------|---------|");
+    for (let i = 0; i < result.runtimeErrors.length; i++) {
+      const err = result.runtimeErrors[i];
+      const blockIcon = err.blocking ? "🚫 yes" : "ℹ️ no";
+      lines.push(`| ${i + 1} | ${err.source} | ${err.severity} | ${blockIcon} | ${err.message.slice(0, 100)} |`);
+    }
   }
 
   return lines.join("\n");

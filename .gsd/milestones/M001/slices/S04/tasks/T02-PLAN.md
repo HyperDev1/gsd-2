@@ -143,3 +143,11 @@ Integrate `captureRuntimeErrors()` into the live verification flow in `auto.ts` 
 - `src/resources/extensions/gsd/auto.ts` — has `captureRuntimeErrors` import and call in gate block; blocking errors override `result.passed`
 - `src/resources/extensions/gsd/verification-evidence.ts` — `EvidenceJSON` has `runtimeErrors?` field; `writeVerificationJSON` writes it; `formatEvidenceTable` renders it
 - `src/resources/extensions/gsd/tests/verification-evidence.test.ts` — 6+ new tests for runtime error evidence format
+
+## Observability Impact
+
+- **New signal: `runtimeErrors` array in T##-VERIFY.json** — When runtime errors are present, the JSON evidence artifact gains an optional `runtimeErrors` array with per-error `source`, `severity`, `message`, and `blocking` fields. Absent when no runtime errors detected.
+- **New section: "Runtime Errors" in markdown evidence table** — `formatEvidenceTable` appends a 5-column table (Source, Severity, Blocking, Message) below the verification checks table when `runtimeErrors` exist. Messages truncated to 100 chars in table (full in JSON).
+- **New stderr output** — Blocking runtime errors emit `verification-gate: N blocking runtime error(s) detected` plus per-error `[source] severity: message` lines to stderr.
+- **Gate override** — `result.passed` is set to `false` when any blocking runtime error exists, even if all verification commands passed. Inspect `T##-VERIFY.json` to see both passing checks and blocking runtime errors in the same artifact.
+- **Inspection** — `grep "runtimeErrors" .gsd/milestones/M*/slices/S*/tasks/*-VERIFY.json` to find tasks that encountered runtime errors. `jq '.runtimeErrors[] | select(.blocking)' *-VERIFY.json` for blocking errors only.

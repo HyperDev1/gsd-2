@@ -432,3 +432,136 @@ test("verification-evidence: writeVerificationJSON without retry params omits re
     rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// ─── Runtime Error Evidence Tests (S04/T02) ──────────────────────────────────
+
+test("verification-evidence: writeVerificationJSON includes runtimeErrors when present", () => {
+  const tmp = makeTempDir("ve-rt-present");
+  try {
+    const result = makeResult({
+      passed: false,
+      checks: [
+        { command: "npm run test", exitCode: 0, stdout: "ok", stderr: "", durationMs: 100 },
+      ],
+      runtimeErrors: [
+        { source: "bg-shell", severity: "crash", message: "Server crashed", blocking: true },
+        { source: "browser", severity: "error", message: "Uncaught TypeError", blocking: false },
+      ],
+    });
+
+    writeVerificationJSON(result, tmp, "T01");
+
+    const json = JSON.parse(readFileSync(join(tmp, "T01-VERIFY.json"), "utf-8"));
+    assert.ok(Array.isArray(json.runtimeErrors), "runtimeErrors should be an array");
+    assert.equal(json.runtimeErrors.length, 2, "should have 2 runtime errors");
+    assert.equal(json.runtimeErrors[0].source, "bg-shell");
+    assert.equal(json.runtimeErrors[0].severity, "crash");
+    assert.equal(json.runtimeErrors[0].message, "Server crashed");
+    assert.equal(json.runtimeErrors[0].blocking, true);
+    assert.equal(json.runtimeErrors[1].source, "browser");
+    assert.equal(json.runtimeErrors[1].severity, "error");
+    assert.equal(json.runtimeErrors[1].message, "Uncaught TypeError");
+    assert.equal(json.runtimeErrors[1].blocking, false);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("verification-evidence: writeVerificationJSON omits runtimeErrors when absent", () => {
+  const tmp = makeTempDir("ve-rt-absent");
+  try {
+    const result = makeResult({
+      passed: true,
+      checks: [
+        { command: "npm run lint", exitCode: 0, stdout: "", stderr: "", durationMs: 50 },
+      ],
+    });
+
+    writeVerificationJSON(result, tmp, "T01");
+
+    const raw = readFileSync(join(tmp, "T01-VERIFY.json"), "utf-8");
+    assert.ok(!raw.includes('"runtimeErrors"'), "raw JSON should not contain runtimeErrors key");
+    const json = JSON.parse(raw);
+    assert.ok(!("runtimeErrors" in json), "runtimeErrors key should not be present in parsed JSON");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("verification-evidence: writeVerificationJSON omits runtimeErrors when empty array", () => {
+  const tmp = makeTempDir("ve-rt-empty");
+  try {
+    const result = makeResult({
+      passed: true,
+      checks: [],
+      runtimeErrors: [],
+    });
+
+    writeVerificationJSON(result, tmp, "T01");
+
+    const raw = readFileSync(join(tmp, "T01-VERIFY.json"), "utf-8");
+    assert.ok(!raw.includes('"runtimeErrors"'), "raw JSON should not contain runtimeErrors key when empty array");
+    const json = JSON.parse(raw);
+    assert.ok(!("runtimeErrors" in json), "runtimeErrors key should not be present for empty array");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("verification-evidence: formatEvidenceTable appends runtime errors section", () => {
+  const result = makeResult({
+    passed: false,
+    checks: [
+      { command: "npm run test", exitCode: 0, stdout: "", stderr: "", durationMs: 100 },
+    ],
+    runtimeErrors: [
+      { source: "bg-shell", severity: "crash", message: "Server crashed with SIGKILL", blocking: true },
+      { source: "browser", severity: "warning", message: "Deprecated API usage", blocking: false },
+    ],
+  });
+
+  const table = formatEvidenceTable(result);
+
+  // Should contain runtime errors section
+  assert.ok(table.includes("**Runtime Errors**"), "should have Runtime Errors heading");
+  assert.ok(table.includes("| # | Source | Severity | Blocking | Message |"), "should have runtime errors column headers");
+  assert.ok(table.includes("bg-shell"), "should contain bg-shell source");
+  assert.ok(table.includes("crash"), "should contain crash severity");
+  assert.ok(table.includes("🚫 yes"), "blocking error should show 🚫 yes");
+  assert.ok(table.includes("ℹ️ no"), "non-blocking error should show ℹ️ no");
+  assert.ok(table.includes("Server crashed with SIGKILL"), "should contain error message");
+  assert.ok(table.includes("Deprecated API usage"), "should contain warning message");
+});
+
+test("verification-evidence: formatEvidenceTable omits runtime errors section when none", () => {
+  const result = makeResult({
+    passed: true,
+    checks: [
+      { command: "npm run lint", exitCode: 0, stdout: "", stderr: "", durationMs: 200 },
+    ],
+  });
+
+  const table = formatEvidenceTable(result);
+
+  assert.ok(!table.includes("Runtime Errors"), "should not contain Runtime Errors heading");
+  assert.ok(table.includes("npm run lint"), "should still contain the check table");
+});
+
+test("verification-evidence: formatEvidenceTable truncates runtime error message to 100 chars", () => {
+  const longMessage = "A".repeat(150);
+  const result = makeResult({
+    passed: false,
+    checks: [
+      { command: "npm run test", exitCode: 0, stdout: "", stderr: "", durationMs: 100 },
+    ],
+    runtimeErrors: [
+      { source: "bg-shell", severity: "error", message: longMessage, blocking: false },
+    ],
+  });
+
+  const table = formatEvidenceTable(result);
+
+  // The table should contain the truncated message (100 chars), not the full 150
+  assert.ok(table.includes("A".repeat(100)), "should contain 100 A's");
+  assert.ok(!table.includes("A".repeat(101)), "should not contain 101 A's (truncated)");
+});

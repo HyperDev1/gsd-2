@@ -52,7 +52,7 @@
   - Verify: `npm run test:unit -- --test-name-pattern "verification-gate"` — all tests pass including new runtime error tests
   - Done when: `captureRuntimeErrors()` is exported, tested for all 7 severity classes from D004, and gracefully returns `[]` when bg-shell/browser-tools are unavailable
 
-- [ ] **T02: Wire runtime errors into gate block and extend evidence format** `est:25m`
+- [x] **T02: Wire runtime errors into gate block and extend evidence format** `est:25m`
   - Why: Integrates the capture function into the live verification flow — calling it from auto.ts, merging results into the gate's pass/fail decision, and persisting runtime errors in both JSON and markdown evidence.
   - Files: `src/resources/extensions/gsd/auto.ts`, `src/resources/extensions/gsd/verification-evidence.ts`, `src/resources/extensions/gsd/tests/verification-evidence.test.ts`
   - Do: (1) In auto.ts gate block, after `runVerificationGate()` call (~line 1521), add `const runtimeErrors = await captureRuntimeErrors()`. (2) Merge: `result.runtimeErrors = runtimeErrors`. (3) If any `runtimeErrors` has `blocking: true`, set `result.passed = false`. (4) Extend `EvidenceJSON` with optional `runtimeErrors?: { source: string; severity: string; message: string; blocking: boolean }[]`. (5) Update `writeVerificationJSON` to include runtime errors when present. (6) Update `formatEvidenceTable` to append a "Runtime Errors" section with source/severity/message/blocking columns when `result.runtimeErrors` has entries. (7) Add tests for the new evidence fields and table formatting.
