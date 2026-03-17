@@ -55,7 +55,7 @@
   - Verify: `npm run test:unit -- --test-name-pattern "verification-gate"` — all tests pass
   - Done when: All 9+ test scenarios pass, covering discovery, execution, and edge cases
 
-- [ ] **T03: Wire verification gate into auto.ts handleAgentEnd** `est:30m`
+- [x] **T03: Wire verification gate into auto.ts handleAgentEnd** `est:30m`
   - Why: The gate must fire automatically after execute-task without manual invocation. This is the integration that makes R001 real.
   - Files: `src/resources/extensions/gsd/auto.ts`
   - Do: Import `runVerificationGate` at top of auto.ts. In `handleAgentEnd`, after the `clearUnitRuntimeRecord` block for non-hook units (line ~1481) and before the DB dual-write block (line ~1489), add a conditional block: if `currentUnit.type === "execute-task"`, call `runVerificationGate(basePath, currentUnit.id, basePath)`, log results via `ctx.ui.notify()`. If gate fails, write a stderr warning. The gate must NOT fire for hook units, triage-captures, quick-task, or other unit types. Pass the loaded preferences (use `loadEffectiveGSDPreferences()`) and the current task plan's verify field (read from the task plan file via existing `parseSlicePlan` or `readTaskPlanEntry`).

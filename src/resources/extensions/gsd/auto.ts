@@ -18,8 +18,9 @@ import type {
 
 import { deriveState, invalidateStateCache } from "./state.js";
 import type { BudgetEnforcementMode, GSDState } from "./types.js";
-import { loadFile, parseRoadmap, getManifestStatus, resolveAllOverrides } from "./files.js";
+import { loadFile, parseRoadmap, getManifestStatus, resolveAllOverrides, parsePlan } from "./files.js";
 import { loadPrompt } from "./prompt-loader.js";
+import { runVerificationGate } from "./verification-gate.js";
 export { inlinePriorMilestoneSummary } from "./files.js";
 import { collectSecretsFromManifest } from "../get-secrets-from-user.js";
 import {
@@ -1482,6 +1483,59 @@ export async function handleAgentEnd(
       } catch {
         // Non-fatal
       }
+    }
+  }
+
+  // ── Verification gate: run typecheck/lint/test after execute-task ──
+  if (currentUnit && currentUnit.type === "execute-task") {
+    try {
+      const effectivePrefs = loadEffectiveGSDPreferences();
+      const prefs = effectivePrefs?.preferences;
+
+      // Read task plan verify field from the current task's slice plan
+      // unitId format is "M001/S01/T03" — extract mid, sid, tid
+      const parts = currentUnit.id.split("/");
+      let taskPlanVerify: string | undefined;
+      if (parts.length >= 3) {
+        const [mid, sid, tid] = parts;
+        const planFile = resolveSliceFile(basePath, mid, sid, "PLAN");
+        if (planFile) {
+          const planContent = await loadFile(planFile);
+          if (planContent) {
+            const slicePlan = parsePlan(planContent);
+            const taskEntry = slicePlan?.tasks?.find(t => t.id === tid);
+            taskPlanVerify = taskEntry?.verify;
+          }
+        }
+      }
+
+      const result = runVerificationGate({
+        basePath,
+        unitId: currentUnit.id,
+        cwd: basePath,
+        preferenceCommands: prefs?.verification_commands,
+        taskPlanVerify,
+      });
+
+      if (result.checks.length > 0) {
+        const passCount = result.checks.filter(c => c.exitCode === 0).length;
+        const total = result.checks.length;
+        if (result.passed) {
+          ctx.ui.notify(`Verification gate: ${passCount}/${total} checks passed`);
+        } else {
+          const failures = result.checks.filter(c => c.exitCode !== 0);
+          const failNames = failures.map(f => f.command).join(", ");
+          ctx.ui.notify(`Verification gate: FAILED — ${failNames}`);
+          process.stderr.write(`verification-gate: ${total - passCount}/${total} checks failed\n`);
+          for (const f of failures) {
+            process.stderr.write(`  ${f.command} exited ${f.exitCode}\n`);
+            if (f.stderr) process.stderr.write(`  stderr: ${f.stderr.slice(0, 500)}\n`);
+          }
+        }
+      }
+    } catch (err) {
+      // Gate errors are non-fatal — log and continue
+      process.stderr.write(`verification-gate: error — ${(err as Error).message}\n`);
     }
   }
 
