@@ -1,8 +1,8 @@
 # GSD State
 
 **Active Milestone:** M001: Verification Enforcement
-**Active Slice:** S01: Built-in Verification Gate
-**Phase:** execution
+**Active Slice:** S02: Structured Evidence Format
+**Phase:** executing
 **Requirements Status:** 17 active · 0 validated · 2 deferred · 0 out of scope
 
 ## Milestone Registry
@@ -12,10 +12,10 @@
 - ⬜ **M004:** M004
 
 ## Recent Decisions
-- D001–D005 recorded (verification gate architecture, evidence format, discovery order, severity classification, retry count)
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-Execute S01/T01 (Implement verification gate types, preferences, and core logic).
+Execute task T01 of slice S02 (Create evidence writer module with JSON and markdown formatters).
