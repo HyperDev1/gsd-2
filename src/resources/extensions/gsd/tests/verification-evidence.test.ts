@@ -565,3 +565,179 @@ test("verification-evidence: formatEvidenceTable truncates runtime error message
   assert.ok(table.includes("A".repeat(100)), "should contain 100 A's");
   assert.ok(!table.includes("A".repeat(101)), "should not contain 101 A's (truncated)");
 });
+
+// ─── Audit Warning Evidence Tests (S05/T02) ──────────────────────────────────
+
+const SAMPLE_AUDIT_WARNINGS = [
+  {
+    name: "lodash",
+    severity: "critical" as const,
+    title: "Prototype Pollution",
+    url: "https://github.com/advisories/GHSA-1234",
+    fixAvailable: true,
+  },
+  {
+    name: "express",
+    severity: "high" as const,
+    title: "Open Redirect",
+    url: "https://github.com/advisories/GHSA-5678",
+    fixAvailable: false,
+  },
+  {
+    name: "minimist",
+    severity: "moderate" as const,
+    title: "Prototype Pollution",
+    url: "https://github.com/advisories/GHSA-9012",
+    fixAvailable: true,
+  },
+];
+
+test("verification-evidence: writeVerificationJSON includes auditWarnings when present", () => {
+  const tmp = makeTempDir("ve-audit-present");
+  try {
+    const result = makeResult({
+      passed: true,
+      checks: [
+        { command: "npm run test", exitCode: 0, stdout: "ok", stderr: "", durationMs: 100 },
+      ],
+      auditWarnings: SAMPLE_AUDIT_WARNINGS,
+    });
+
+    writeVerificationJSON(result, tmp, "T01");
+
+    const json = JSON.parse(readFileSync(join(tmp, "T01-VERIFY.json"), "utf-8"));
+    assert.ok(Array.isArray(json.auditWarnings), "auditWarnings should be an array");
+    assert.equal(json.auditWarnings.length, 3, "should have 3 audit warnings");
+    assert.equal(json.auditWarnings[0].name, "lodash");
+    assert.equal(json.auditWarnings[0].severity, "critical");
+    assert.equal(json.auditWarnings[0].title, "Prototype Pollution");
+    assert.equal(json.auditWarnings[0].url, "https://github.com/advisories/GHSA-1234");
+    assert.equal(json.auditWarnings[0].fixAvailable, true);
+    assert.equal(json.auditWarnings[1].name, "express");
+    assert.equal(json.auditWarnings[1].severity, "high");
+    assert.equal(json.auditWarnings[1].fixAvailable, false);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("verification-evidence: writeVerificationJSON omits auditWarnings when absent", () => {
+  const tmp = makeTempDir("ve-audit-absent");
+  try {
+    const result = makeResult({
+      passed: true,
+      checks: [
+        { command: "npm run lint", exitCode: 0, stdout: "", stderr: "", durationMs: 50 },
+      ],
+    });
+
+    writeVerificationJSON(result, tmp, "T01");
+
+    const raw = readFileSync(join(tmp, "T01-VERIFY.json"), "utf-8");
+    assert.ok(!raw.includes('"auditWarnings"'), "raw JSON should not contain auditWarnings key");
+    const json = JSON.parse(raw);
+    assert.ok(!("auditWarnings" in json), "auditWarnings key should not be present in parsed JSON");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("verification-evidence: writeVerificationJSON omits auditWarnings when empty array", () => {
+  const tmp = makeTempDir("ve-audit-empty");
+  try {
+    const result = makeResult({
+      passed: true,
+      checks: [],
+      auditWarnings: [],
+    });
+
+    writeVerificationJSON(result, tmp, "T01");
+
+    const raw = readFileSync(join(tmp, "T01-VERIFY.json"), "utf-8");
+    assert.ok(!raw.includes('"auditWarnings"'), "raw JSON should not contain auditWarnings key when empty array");
+    const json = JSON.parse(raw);
+    assert.ok(!("auditWarnings" in json), "auditWarnings key should not be present for empty array");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("verification-evidence: formatEvidenceTable appends audit warnings section", () => {
+  const result = makeResult({
+    passed: true,
+    checks: [
+      { command: "npm run test", exitCode: 0, stdout: "", stderr: "", durationMs: 100 },
+    ],
+    auditWarnings: SAMPLE_AUDIT_WARNINGS,
+  });
+
+  const table = formatEvidenceTable(result);
+
+  assert.ok(table.includes("**Audit Warnings**"), "should have Audit Warnings heading");
+  assert.ok(table.includes("| # | Package | Severity | Title | Fix Available |"), "should have audit warnings column headers");
+  assert.ok(table.includes("lodash"), "should contain lodash package");
+  assert.ok(table.includes("🔴 critical"), "should show critical emoji");
+  assert.ok(table.includes("🟠 high"), "should show high emoji");
+  assert.ok(table.includes("🟡 moderate"), "should show moderate emoji");
+  assert.ok(table.includes("Prototype Pollution"), "should contain vulnerability title");
+  assert.ok(table.includes("Open Redirect"), "should contain vulnerability title");
+  assert.ok(table.includes("✅ yes"), "fixAvailable true should show ✅ yes");
+  assert.ok(table.includes("❌ no"), "fixAvailable false should show ❌ no");
+});
+
+test("verification-evidence: formatEvidenceTable omits audit warnings section when none", () => {
+  const result = makeResult({
+    passed: true,
+    checks: [
+      { command: "npm run lint", exitCode: 0, stdout: "", stderr: "", durationMs: 200 },
+    ],
+  });
+
+  const table = formatEvidenceTable(result);
+
+  assert.ok(!table.includes("Audit Warnings"), "should not contain Audit Warnings heading");
+  assert.ok(table.includes("npm run lint"), "should still contain the check table");
+});
+
+test("verification-evidence: integration — VerificationResult with auditWarnings → JSON → table", () => {
+  const tmp = makeTempDir("ve-audit-integration");
+  try {
+    const result = makeResult({
+      passed: true,
+      checks: [
+        { command: "npm run typecheck", exitCode: 0, stdout: "ok", stderr: "", durationMs: 1500 },
+      ],
+      auditWarnings: [
+        {
+          name: "got",
+          severity: "moderate" as const,
+          title: "Redirect bypass",
+          url: "https://github.com/advisories/GHSA-abcd",
+          fixAvailable: true,
+        },
+      ],
+    });
+
+    // 1. Write JSON and verify
+    writeVerificationJSON(result, tmp, "T05");
+    const json = JSON.parse(readFileSync(join(tmp, "T05-VERIFY.json"), "utf-8"));
+    assert.equal(json.auditWarnings.length, 1, "JSON should have 1 audit warning");
+    assert.equal(json.auditWarnings[0].name, "got");
+    assert.equal(json.auditWarnings[0].severity, "moderate");
+    assert.equal(json.auditWarnings[0].fixAvailable, true);
+    // passed should still be true — audit warnings are non-blocking
+    assert.equal(json.passed, true, "passed should remain true despite audit warnings");
+
+    // 2. Format table and verify
+    const table = formatEvidenceTable(result);
+    assert.ok(table.includes("**Audit Warnings**"), "table should have Audit Warnings section");
+    assert.ok(table.includes("got"), "table should contain package name");
+    assert.ok(table.includes("🟡 moderate"), "table should show moderate severity with emoji");
+    assert.ok(table.includes("Redirect bypass"), "table should contain vulnerability title");
+    assert.ok(table.includes("✅ yes"), "table should show fix available");
+    // Check table still has the main verification checks
+    assert.ok(table.includes("npm run typecheck"), "table should still have main check");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});

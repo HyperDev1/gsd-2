@@ -73,6 +73,14 @@ Key constraints:
 - `npm run test:unit` — full suite, no regressions
 - `grep -n "runDependencyAudit" src/resources/extensions/gsd/auto.ts` — shows import + call site (2 hits)
 
+## Observability Impact
+
+- **New stderr signals:** `verification-gate: N audit warning(s)` logged when audit finds vulnerabilities; per-warning detail lines `  [severity] package: title` follow.
+- **New evidence surface:** `auditWarnings` array in `T##-VERIFY.json` contains machine-readable audit data (name, severity, title, url, fixAvailable) when vulnerabilities are present. Absent from JSON when no warnings.
+- **New markdown surface:** "Audit Warnings" section with severity-emoji table appended to evidence markdown when audit data is non-empty.
+- **Inspection:** `grep -n auditWarnings T##-VERIFY.json` confirms presence/absence. `grep "Audit Warnings" *.md` confirms markdown rendering.
+- **Failure visibility:** audit is always non-blocking — `result.passed` is never modified. Empty `auditWarnings` or absent field = no dependency issues or audit skipped.
+
 ## Inputs
 
 - `src/resources/extensions/gsd/types.ts` — `AuditWarning` interface and `auditWarnings` field on `VerificationResult` (from T01)

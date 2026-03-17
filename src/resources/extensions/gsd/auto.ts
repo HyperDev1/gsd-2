@@ -20,7 +20,7 @@ import { deriveState, invalidateStateCache } from "./state.js";
 import type { BudgetEnforcementMode, GSDState } from "./types.js";
 import { loadFile, parseRoadmap, getManifestStatus, resolveAllOverrides, parsePlan } from "./files.js";
 import { loadPrompt } from "./prompt-loader.js";
-import { runVerificationGate, formatFailureContext, captureRuntimeErrors } from "./verification-gate.js";
+import { runVerificationGate, formatFailureContext, captureRuntimeErrors, runDependencyAudit } from "./verification-gate.js";
 import { writeVerificationJSON } from "./verification-evidence.js";
 export { inlinePriorMilestoneSummary } from "./files.js";
 import { collectSecretsFromManifest } from "../get-secrets-from-user.js";
@@ -1533,6 +1533,16 @@ export async function handleAgentEnd(
         // Blocking runtime errors override gate pass
         if (runtimeErrors.some(e => e.blocking)) {
           result.passed = false;
+        }
+      }
+
+      // Conditional dependency audit (R008)
+      const auditWarnings = runDependencyAudit(basePath);
+      if (auditWarnings.length > 0) {
+        result.auditWarnings = auditWarnings;
+        process.stderr.write(`verification-gate: ${auditWarnings.length} audit warning(s)\n`);
+        for (const w of auditWarnings) {
+          process.stderr.write(`  [${w.severity}] ${w.name}: ${w.title}\n`);
         }
       }
 

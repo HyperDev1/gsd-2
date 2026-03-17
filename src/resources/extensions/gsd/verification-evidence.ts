@@ -29,6 +29,14 @@ export interface RuntimeErrorJSON {
   blocking: boolean;
 }
 
+export interface AuditWarningJSON {
+  name: string;
+  severity: string;
+  title: string;
+  url: string;
+  fixAvailable: boolean;
+}
+
 export interface EvidenceJSON {
   schemaVersion: 1;
   taskId: string;
@@ -40,6 +48,7 @@ export interface EvidenceJSON {
   retryAttempt?: number;
   maxRetries?: number;
   runtimeErrors?: RuntimeErrorJSON[];
+  auditWarnings?: AuditWarningJSON[];
 }
 
 /**
@@ -82,6 +91,16 @@ export function writeVerificationJSON(
       severity: e.severity,
       message: e.message,
       blocking: e.blocking,
+    }));
+  }
+
+  if (result.auditWarnings && result.auditWarnings.length > 0) {
+    evidence.auditWarnings = result.auditWarnings.map(w => ({
+      name: w.name,
+      severity: w.severity,
+      title: w.title,
+      url: w.url,
+      fixAvailable: w.fixAvailable,
     }));
   }
 
@@ -137,6 +156,26 @@ export function formatEvidenceTable(result: VerificationResult): string {
       const err = result.runtimeErrors[i];
       const blockIcon = err.blocking ? "🚫 yes" : "ℹ️ no";
       lines.push(`| ${i + 1} | ${err.source} | ${err.severity} | ${blockIcon} | ${err.message.slice(0, 100)} |`);
+    }
+  }
+
+  if (result.auditWarnings && result.auditWarnings.length > 0) {
+    const severityEmoji: Record<string, string> = {
+      critical: "🔴",
+      high: "🟠",
+      moderate: "🟡",
+      low: "⚪",
+    };
+    lines.push("");
+    lines.push("**Audit Warnings**");
+    lines.push("");
+    lines.push("| # | Package | Severity | Title | Fix Available |");
+    lines.push("|---|---------|----------|-------|---------------|");
+    for (let i = 0; i < result.auditWarnings.length; i++) {
+      const w = result.auditWarnings[i];
+      const emoji = severityEmoji[w.severity] ?? "⚪";
+      const fix = w.fixAvailable ? "✅ yes" : "❌ no";
+      lines.push(`| ${i + 1} | ${w.name} | ${emoji} ${w.severity} | ${w.title} | ${fix} |`);
     }
   }
 

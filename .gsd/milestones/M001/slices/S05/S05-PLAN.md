@@ -46,7 +46,7 @@
   - Verify: `npm run test:unit -- --test-name-pattern "dependency-audit"` passes, `npx --yes tsx src/resources/extensions/gsd/verification-gate.ts` compiles
   - Done when: `runDependencyAudit()` is exported, all dependency-audit tests pass, function handles all graceful-failure paths
 
-- [ ] **T02: Wire audit into evidence formatting and auto.ts gate block** `est:25m`
+- [x] **T02: Wire audit into evidence formatting and auto.ts gate block** `est:25m`
   - Why: Connects the audit function to the verification pipeline — results appear in evidence JSON/markdown and the function is called during the gate.
   - Files: `src/resources/extensions/gsd/verification-evidence.ts`, `src/resources/extensions/gsd/auto.ts`, `src/resources/extensions/gsd/tests/verification-evidence.test.ts`
   - Do: Add `AuditWarningJSON` interface and `auditWarnings?: AuditWarningJSON[]` to `EvidenceJSON`. Extend `writeVerificationJSON` to include audit warnings (same conditional pattern as runtimeErrors). Extend `formatEvidenceTable` to append "Audit Warnings" markdown section. Wire `runDependencyAudit(basePath)` call in auto.ts gate block after `captureRuntimeErrors()`, attach to `result.auditWarnings`. Add stderr logging for audit warnings. Add evidence tests for audit warning JSON persistence and markdown formatting.
