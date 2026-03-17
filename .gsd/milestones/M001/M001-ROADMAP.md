@@ -61,7 +61,7 @@ This milestone is complete only when all are true:
 - [x] **S01: Built-in Verification Gate** `risk:high` `depends:[]`
   > After this: After execute-task completes, typecheck/lint/test runs automatically via a built-in gate. Task is blocked until commands pass. Evidence of pass/fail is logged to stdout.
 
-- [ ] **S02: Structured Evidence Format** `risk:medium` `depends:[S01]`
+- [x] **S02: Structured Evidence Format** `risk:medium` `depends:[S01]`
   > After this: Task summaries contain a canonical verification evidence table. T##-VERIFY.json files are written alongside summaries with machine-queryable results. Observability validator rejects summaries without evidence blocks.
 
 - [ ] **S03: Auto-Fix Retry Loop** `risk:medium` `depends:[S01]`
