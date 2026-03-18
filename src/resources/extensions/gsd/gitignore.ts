@@ -77,80 +77,25 @@ const BASELINE_PATTERNS = [
 ];
 
 /**
- * Ensure basePath/.gitignore contains all baseline patterns.
- * Creates the file if missing; appends only missing lines if it exists.
+ * Ensure basePath/.gitignore contains a blanket `.gsd/` ignore.
+ * Creates the file if missing; appends `.gsd/` if not present.
  * Returns true if the file was created or modified, false if already complete.
  *
- * When `commitDocs` is false, the entire `.gsd/` directory is added to
- * .gitignore instead of individual runtime patterns, keeping all GSD
- * artifacts local-only.
+ * `.gsd/` state is managed externally (symlinked to `~/.gsd/projects/<hash>/`),
+ * so the entire directory is always gitignored.
  */
-export function ensureGitignore(basePath: string, options?: { commitDocs?: boolean; manageGitignore?: boolean }): boolean {
+export function ensureGitignore(basePath: string, options?: { manageGitignore?: boolean }): boolean {
   // If manage_gitignore is explicitly false, do not touch .gitignore at all
   if (options?.manageGitignore === false) return false;
 
   const gitignorePath = join(basePath, ".gitignore");
-  const commitDocs = options?.commitDocs !== false; // default true
 
   let existing = "";
   if (existsSync(gitignorePath)) {
     existing = readFileSync(gitignorePath, "utf-8");
   }
 
-  // When commit_docs is false, ensure blanket ".gsd/" is in .gitignore
-  // and skip the self-heal that would remove it.
-  if (!commitDocs) {
-    return ensureBlanketGsdIgnore(gitignorePath, existing);
-  }
-
-  // Self-heal: remove blanket ".gsd/" lines from pre-v2.14.0 projects.
-  // The blanket ignore prevented planning artifacts (.gsd/milestones/) from
-  // being tracked in git, causing artifacts to vanish in worktrees and
-  // triggering loop detection failures. Replace with explicit runtime-only
-  // ignores so planning files are tracked naturally.
-  let modified = false;
-  const lines = existing.split("\n");
-  const filteredLines = lines.filter(line => {
-    const trimmed = line.trim();
-    // Remove standalone ".gsd/" lines (blanket ignore) but keep specific
-    // .gsd/ subpath patterns like ".gsd/activity/" or ".gsd/auto.lock"
-    if (trimmed === ".gsd/" || trimmed === ".gsd") {
-      modified = true;
-      return false;
-    }
-    return true;
-  });
-  if (modified) {
-    existing = filteredLines.join("\n");
-    writeFileSync(gitignorePath, existing, "utf-8");
-  }
-
-  // Parse existing lines (trimmed, ignoring comments and blanks)
-  const existingLines = new Set(
-    existing
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith("#")),
-  );
-
-  // Find patterns not yet present
-  const missing = BASELINE_PATTERNS.filter((p) => !existingLines.has(p));
-
-  if (missing.length === 0) return modified;
-
-  // Build the block to append
-  const block = [
-    "",
-    "# ── GSD baseline (auto-generated) ──",
-    ...missing,
-    "",
-  ].join("\n");
-
-  // Ensure existing content ends with a newline before appending
-  const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
-  writeFileSync(gitignorePath, existing + prefix + block, "utf-8");
-
-  return true;
+  return ensureBlanketGsdIgnore(gitignorePath, existing);
 }
 
 /**
@@ -219,7 +164,7 @@ See \`~/.gsd/agent/extensions/gsd/docs/preferences-reference.md\` for full field
 - \`models\`: Model preferences for specific task types
 - \`skill_discovery\`: Automatic skill detection preferences
 - \`auto_supervisor\`: Supervision and gating rules for autonomous modes
-- \`git\`: Git preferences — \`main_branch\` (default branch name for new repos, e.g., "main", "master", "trunk"), \`auto_push\`, \`snapshots\`, \`commit_docs\` (set to \`false\` to keep .gsd/ local-only), etc.
+- \`git\`: Git preferences — \`main_branch\` (default branch name for new repos, e.g., "main", "master", "trunk"), \`auto_push\`, \`snapshots\`, etc.
 
 ## Examples
 
@@ -241,8 +186,8 @@ custom_instructions:
 }
 
 /**
- * When commit_docs is false, ensure `.gsd/` is in .gitignore as a blanket
- * pattern. This keeps all GSD artifacts local-only.
+ * Ensure `.gsd/` is in .gitignore as a blanket pattern.
+ * .gsd/ state is managed externally and always gitignored.
  * Returns true if the file was modified, false if already complete.
  */
 function ensureBlanketGsdIgnore(gitignorePath: string, existing: string): boolean {
@@ -258,7 +203,7 @@ function ensureBlanketGsdIgnore(gitignorePath: string, existing: string): boolea
 
   const block = [
     "",
-    "# ── GSD (local-only, commit_docs: false) ──",
+    "# ── GSD (managed externally) ──",
     ".gsd/",
     "",
   ].join("\n");
