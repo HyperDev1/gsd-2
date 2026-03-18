@@ -30,6 +30,25 @@ function extractBodyAfterFrontmatter(content: string): string | null {
   return afterFrontmatter.trim() ? afterFrontmatter : null;
 }
 
+// ─── Numeric validation helpers ──────────────────────────────────────────────
+
+/** Parse a string as a non-negative integer, or return null on failure. */
+function tryParseInteger(val: string): number | null {
+  return /^\d+$/.test(val) ? Number(val) : null;
+}
+
+/** Parse a string as a finite number, or return null on failure. */
+function tryParseNumber(val: string): number | null {
+  const n = Number(val);
+  return !isNaN(n) && isFinite(n) ? n : null;
+}
+
+/** Parse a string as a number in the 0–100 range, or return null on failure. */
+function tryParsePercentage(val: string): number | null {
+  const n = Number(val);
+  return !isNaN(n) && n >= 0 && n <= 100 ? n : null;
+}
+
 export async function handlePrefs(args: string, ctx: ExtensionCommandContext): Promise<void> {
   const trimmed = args.trim();
 
@@ -304,9 +323,10 @@ async function configureTimeouts(ctx: ExtensionCommandContext, prefs: Record<str
     );
     if (input !== null && input !== undefined) {
       const val = input.trim();
-      if (val && /^\d+$/.test(val)) {
-        autoSup[field.key] = Number(val);
-      } else if (val && !/^\d+$/.test(val)) {
+      const parsed = tryParseInteger(val);
+      if (val && parsed !== null) {
+        autoSup[field.key] = parsed;
+      } else if (val) {
         ctx.ui.notify(`Invalid value "${val}" for ${field.label} — must be a whole number. Keeping previous value.`, "warning");
       } else if (!val && currentStr) {
         delete autoSup[field.key];
@@ -465,9 +485,10 @@ async function configureBudget(ctx: ExtensionCommandContext, prefs: Record<strin
   );
   if (ceilingInput !== null && ceilingInput !== undefined) {
     const val = ceilingInput.trim().replace(/^\$/, "");
-    if (val && !isNaN(Number(val)) && isFinite(Number(val))) {
-      prefs.budget_ceiling = Number(val);
-    } else if (val && (isNaN(Number(val)) || !isFinite(Number(val)))) {
+    const parsed = tryParseNumber(val);
+    if (val && parsed !== null) {
+      prefs.budget_ceiling = parsed;
+    } else if (val) {
       ctx.ui.notify(`Invalid budget ceiling "${val}" — must be a number. Keeping previous value.`, "warning");
     } else if (!val && ceilingStr) {
       delete prefs.budget_ceiling;
@@ -491,14 +512,14 @@ async function configureBudget(ctx: ExtensionCommandContext, prefs: Record<strin
   );
   if (contextPauseInput !== null && contextPauseInput !== undefined) {
     const val = contextPauseInput.trim().replace(/%$/, "");
-    if (val && !isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100) {
-      const num = Number(val);
-      if (num === 0) {
+    const parsed = tryParsePercentage(val);
+    if (val && parsed !== null) {
+      if (parsed === 0) {
         delete prefs.context_pause_threshold;
       } else {
-        prefs.context_pause_threshold = num;
+        prefs.context_pause_threshold = parsed;
       }
-    } else if (val && (isNaN(Number(val)) || Number(val) < 0 || Number(val) > 100)) {
+    } else if (val) {
       ctx.ui.notify(`Invalid context pause threshold "${val}" — must be 0-100. Keeping previous value.`, "warning");
     }
   }
