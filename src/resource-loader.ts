@@ -112,6 +112,13 @@ function collectFileEntries(dir: string, root: string, out: string[]): void {
 
 
 export function getNewerManagedResourceVersion(agentDir: string, currentVersion: string): string | null {
+  // Skip version-skew check for development builds (version 0.0.0) — these are
+  // local forks or `npm link` setups where the binary intentionally has no real
+  // version. Blocking them would make local development impossible when managed
+  // resources were previously synced by a released version.
+  if (currentVersion === '0.0.0') {
+    return null
+  }
   const managedVersion = readManagedResourceVersion(agentDir)
   if (!managedVersion) {
     return null
@@ -216,7 +223,7 @@ function copyDirRecursive(src: string, dest: string): void {
  * - extensions/ → ~/.gsd/agent/extensions/   (overwrite when version changes)
  * - agents/     → ~/.gsd/agent/agents/        (overwrite when version changes)
  * - skills/     → ~/.gsd/agent/skills/        (overwrite when version changes)
- * - GSD-WORKFLOW.md is read directly from bundled path via GSD_WORKFLOW_PATH env var
+ * - GSD-WORKFLOW.md → ~/.gsd/agent/GSD-WORKFLOW.md (fallback for env var miss)
  *
  * Skips the copy when the managed-resources.json version matches the current
  * GSD version, avoiding ~128ms of synchronous cpSync on every startup.
@@ -244,6 +251,13 @@ export function initResources(agentDir: string): void {
   syncResourceDir(bundledExtensionsDir, join(agentDir, 'extensions'))
   syncResourceDir(join(resourcesDir, 'agents'), join(agentDir, 'agents'))
   syncResourceDir(join(resourcesDir, 'skills'), join(agentDir, 'skills'))
+
+  // Sync GSD-WORKFLOW.md to agentDir as a fallback for when GSD_WORKFLOW_PATH
+  // env var is not set (e.g. fork/dev builds, alternative entry points).
+  const workflowSrc = join(resourcesDir, 'GSD-WORKFLOW.md')
+  if (existsSync(workflowSrc)) {
+    try { copyFileSync(workflowSrc, join(agentDir, 'GSD-WORKFLOW.md')) } catch { /* non-fatal */ }
+  }
 
   // Ensure all newly copied files are owner-writable so the next run can
   // overwrite them (covers extensions, agents, and skills in one walk).

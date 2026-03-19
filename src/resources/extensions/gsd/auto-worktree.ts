@@ -6,7 +6,7 @@
  * manages create, enter, detect, and teardown for auto-mode worktrees.
  */
 
-import { existsSync, readFileSync, realpathSync, unlinkSync, statSync, rmSync, readdirSync, cpSync, lstatSync as lstatSyncFn } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, statSync, rmSync, readdirSync, cpSync, lstatSync as lstatSyncFn } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { GSDError, GSD_IO_ERROR, GSD_GIT_ERROR } from "./errors.js";
 import { execSync, execFileSync } from "node:child_process";
@@ -93,6 +93,9 @@ export function syncGsdStateToWorktree(mainBasePath: string, worktreePath_: stri
   // Sync milestones: copy entire milestone directories that are missing
   const mainMilestonesDir = join(mainGsd, "milestones");
   const wtMilestonesDir = join(wtGsd, "milestones");
+  if (existsSync(mainMilestonesDir) && !existsSync(wtMilestonesDir)) {
+    mkdirSync(wtMilestonesDir, { recursive: true });
+  }
   if (existsSync(mainMilestonesDir) && existsSync(wtMilestonesDir)) {
     try {
       const mainMilestones = readdirSync(mainMilestonesDir, { withFileTypes: true })
