@@ -1,7 +1,6 @@
 
 # ── GSD project state (development-only, lives in worktree branches) ──
 
-.claude/
 RELEASE-GUIDE.md
 *.tgz
 .DS_Store
